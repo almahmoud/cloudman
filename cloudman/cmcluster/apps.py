@@ -26,4 +26,10 @@ class CmClusterConfig(AppConfig):
                   "An error occurred while setting up Rancher!!: ", e)
 
     def import_bootstrap_data(self, json_data):
-        pass
+        app_config = json_data.get('config_app')
+        if app_config:
+            cm2_config = app_config.get('config_cloudman2')
+            if cm2_config:
+                token = cm2_config.get('pulsar_token')
+                if token:
+                    os.environ.update({'PULSAR_TOKEN': token})

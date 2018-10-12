@@ -11,14 +11,30 @@ class HelmsmanConfig(AppConfig):
     def ready(self):
         try:
             if os.environ.get("HELMSMAN_AUTO_DEPLOY"):
-                self.setup_helmsman()
+                galaxy_repo = {"galaxyproject":
+                                   {"url":
+                                       "https://raw.githubusercontent.com/"
+                                       "CloudVE/helm-charts/master/",
+                                    "name": "galaxy-stable"}}
+                pulsar_repo = {"pulsar":
+                                   {"url":
+                                       "https://raw.githubusercontent.com/"
+                                       "CloudVE/helm-charts/master/",
+                                    "name": "pulsar-stable"}}
+                pulsar_token = os.environ.pop("PULSAR_TOKEN")
+                repos = {}
+                if pulsar_token:
+                    repos.update(pulsar_repo)
+                else:
+                    repos.update(galaxy_repo)
+                self.setup_helmsman(repos)
         except Exception as e:
             log.exception("HelmsManConfig.ready()->setup_helmsman(): An error"
                           " occurred while setting up HelmsMan!!: ")
             print("HelmsManConfig.ready()->setup_helmsman(): An error occurred"
                   " while setting up HelmsMan!!: ", e)
 
-    def setup_helmsman(self):
+    def setup_helmsman(self, repos):
         client = HelmClient()
         print("Initializing kube roles for tiller...")
         # FIXME: Check whether tiller role exists instead of ignoring exception
@@ -34,14 +50,17 @@ class HelmsmanConfig(AppConfig):
         print("Initializing tiller...")
         client.helm_init(service_account="tiller", wait=True)
         print("Adding default repos...")
-        client.repositories.create(
-            "galaxyproject",
-            "https://raw.githubusercontent.com/CloudVE/helm-charts/master/")
-        self.add_default_charts(client)
+        for key in repos.keys():
+            print("Adding default repo: " + key)
+            info = repos.get(key)
+            client.repositories.create(
+                key,
+                info.get("url"))
+            self.add_default_charts(client, key, info.get('name'))
 
-    def add_default_charts(self, client):
-        print("Installing default charts...")
-        self.install_if_not_exist(client, "galaxyproject", "galaxy-stable")
+    def add_default_charts(self, client, repo_name, chart_name):
+        print("Installing default charts: ...")
+        self.install_if_not_exist(client, repo_name, chart_name)
 
     def install_if_not_exist(self, client, repo_name, chart_name):
         existing_release = [r for r in client.releases.list()
